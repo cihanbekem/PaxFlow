@@ -13,6 +13,8 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi import HTTPException
 from datetime import timedelta
+from collections import deque
+
 
 
 TR_LEVEL = {"GREEN": "YEŞİL", "YELLOW": "SARI", "RED": "KIRMIZI"}
@@ -80,7 +82,7 @@ def _summarize(rec):
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CSV_PATH = os.getenv("CSV_PATH", os.path.join(BASE_DIR, "flight_data.csv"))
-BUCKET = "1T"          # 1 dakika
+BUCKET = "1min"          # 1 dakika
 ALPHA = 0.25           # EWMA
 MU_PER_OFFICER = 0.50  # kişi/dk (örnek)
 GREEN, YELLOW = 0.7, 0.9
@@ -203,80 +205,43 @@ threading.Thread(target=updater_loop, daemon=True).start()
 def csv_latest(limit: int = 50):
     """
     CSV'nin son N satırını gönderir (en yeni en üstte).
-    Sürüm farklarına tolerant: on_bad_lines / error_bad_lines fallback,
-    ayırıcıyı otomatik koklar (sep=None, engine='python').
     """
-    path = os.path.abspath(CSV_PATH)
-    if not os.path.exists(path) or os.path.getsize(path) == 0:
-        return {"columns": [], "rows": []}
-
-    df = None
-    last_err = None
-
-    # 1) En modern yol
     try:
-        df = pd.read_csv(path, engine="python", sep=None, on_bad_lines="skip")
-    except TypeError as e:
-        # eski pandas: on_bad_lines yok
-        last_err = e
+        # Basit CSV okuma
+        df = pd.read_csv(CSV_PATH)
+        
+        if df.empty:
+            return {"columns": list(df.columns), "rows": []}
+
+        # son N satır
+        tail = df.tail(int(limit)).copy().reset_index(drop=True)
+        
+        # basit satır id'si
+        tail["__rowid"] = tail.index.astype(int)
+        
+        # NaN değerleri temizle ve tüm kolonları string yap
+        for col in tail.columns:
+            if col != "__rowid":
+                # NaN değerleri boş string yap
+                tail[col] = tail[col].fillna("")
+                # String'e çevir
+                tail[col] = tail[col].astype(str)
+
+        rows = tail.to_dict(orient="records")[::-1]  # en yeni en üste
+        return {"columns": list(tail.columns), "rows": rows}
+        
     except Exception as e:
-        last_err = e
-
-    # 2) Eski pandas için fallback
-    if df is None:
-        try:
-            # error_bad_lines / warn_bad_lines eski sürümlerde vardı
-            df = pd.read_csv(path, engine="python", sep=None,
-                             error_bad_lines=False, warn_bad_lines=False)  # type: ignore
-        except Exception as e:
-            last_err = e
-
-    # 3) Son çare: defaults
-    if df is None:
-        try:
-            df = pd.read_csv(path)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"read_csv failed: {e}; last_try: {last_err}")
-
-    if df.empty:
-        return {"columns": list(df.columns), "rows": []}
-
-    # Zaman sütunu varsa sırala
-    ts_col = _find_ts_col(df.columns)
-    if ts_col:
-        df[ts_col] = pd.to_datetime(df[ts_col], errors="coerce")
-        df = df.dropna(subset=[ts_col]).sort_values(ts_col)
-
-    # son N satır (en yeni en üstte göstereceğiz)
-    tail = df.tail(int(limit)).copy().reset_index(drop=True)
-
-    # datetime kolonlarını string yap
-    for c in tail.columns:
-        try:
-            if pd.api.types.is_datetime64_any_dtype(tail[c]):
-                tail[c] = tail[c].dt.strftime("%Y-%m-%d %H:%M:%S")
-        except Exception:
-            pass
-
-    # basit satır id'si
-    tail["__rowid"] = tail.index.astype(int)
-
-    # Kolon sırası: [ts, checkpoint_id, ... , __rowid]
-    cols = list(tail.columns)
-    ordered = []
-    if ts_col and ts_col in cols: ordered.append(ts_col)
-    if "checkpoint_id" in cols and "checkpoint_id" not in ordered: ordered.append("checkpoint_id")
-    for c in cols:
-        if c not in ordered and c != "__rowid":
-            ordered.append(c)
-    if "__rowid" in cols: ordered.append("__rowid")
-
-    rows = tail[ordered].to_dict(orient="records")[::-1]  # en yeni en üste
-    return {"columns": ordered, "rows": rows}
+        # Hata durumunda basit bir hata mesajı döndür
+        import traceback
+        return {"columns": [], "rows": [], "error": str(e), "traceback": traceback.format_exc()}
 
 @app.get("/health")
 def health():
     return {"ok": True, "csv": os.path.abspath(CSV_PATH)}
+
+@app.get("/test")
+def test():
+    return {"message": "Server is working"}
 
 @app.get("/api/summary")
 def summary(minutes: int = 15):
@@ -286,6 +251,8 @@ def summary(minutes: int = 15):
     data = _dedupe_by_minute(data)[-minutes:]
     human = [_summarize(r) for r in data]
     return JSONResponse(human)
+
+
 
 
 @app.get("/api/latest")
@@ -316,8 +283,8 @@ def metrics_last_minutes(minutes: int = 60):
     path = os.path.abspath(CSV_PATH)
     if not os.path.exists(path) or os.path.getsize(path) == 0:
         # Boş seri üret
-        end = pd.Timestamp.now().floor("T")
-        idx = pd.date_range(end=end, periods=minutes, freq="1T")
+        end = pd.Timestamp.now().floor("min")
+        idx = pd.date_range(end=end, periods=minutes, freq="1min")
         series = [{"ts": t.isoformat(), "count": 0} for t in idx]
         return {
             "series": series,
@@ -325,10 +292,10 @@ def metrics_last_minutes(minutes: int = 60):
         }
 
     # CSV'yi toleranslı oku (eşzamanlı yazımda sorun çıkmasın)
-    df = pd.read_csv(path, engine="python", on_bad_lines="skip", encoding_errors="ignore")
+    df = pd.read_csv(path)
     if df.empty:
-        end = pd.Timestamp.now().floor("T")
-        idx = pd.date_range(end=end, periods=minutes, freq="1T")
+        end = pd.Timestamp.now().floor("min")
+        idx = pd.date_range(end=end, periods=minutes, freq="1min")
         series = [{"ts": t.isoformat(), "count": 0} for t in idx]
         return {
             "series": series,
@@ -347,20 +314,20 @@ def metrics_last_minutes(minutes: int = 60):
     df = df.dropna(subset=[ts_col])
 
     # Hedef zaman aralığı: son N tam dakika
-    end = pd.Timestamp.now().floor("T")
+    end = pd.Timestamp.now().floor("min")
     start = end - pd.Timedelta(minutes=minutes-1)
     # Dakikalık sayım
     grp = (
         df.set_index(ts_col)
           .groupby("checkpoint_id")
-          .resample("1T").size()
+          .resample("1min").size()
           .rename("n_t")
           .reset_index()
     )
     # Her CP için eksik dakikaları 0 ile doldur, sonra aralığa kırp
     frames = []
     for cp, g in grp.groupby("checkpoint_id"):
-        g = g.set_index(ts_col).asfreq("1T")
+        g = g.set_index(ts_col).asfreq("1min")
         g["n_t"] = g["n_t"].fillna(0).astype(int)
         g["checkpoint_id"] = cp
         g = g.loc[start:end].reset_index()
@@ -373,7 +340,7 @@ def metrics_last_minutes(minutes: int = 60):
     # Toplam (tüm CP'ler) dakika dakika
     total_per_min = (
         res.groupby(ts_col)["n_t"].sum()
-          .reindex(pd.date_range(start=start, end=end, freq="1T"), fill_value=0)
+          .reindex(pd.date_range(start=start, end=end, freq="1min"), fill_value=0)
     )
     series = [{"ts": t.isoformat(), "count": int(c)} for t, c in total_per_min.items()]
 

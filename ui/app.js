@@ -305,7 +305,40 @@ async function render() {
 }
 
 /* tema düğmesi */
-document.getElementById('themeToggle').addEventListener('click', () => document.body.classList.toggle('light'));
+document.getElementById('themeToggle').addEventListener('click', () => {
+  const body = document.body;
+  const toggleBtn = document.getElementById('themeToggle');
+  
+  body.classList.toggle('light');
+  
+  // İkon değiştir
+  if (body.classList.contains('light')) {
+    toggleBtn.innerHTML = '🌙'; // Ay ikonu (açık temadan koyu temaya geçiş)
+    toggleBtn.title = 'Koyu Temaya Geç';
+  } else {
+    toggleBtn.innerHTML = '☀️'; // Güneş ikonu (koyu temadan açık temaya geçiş)
+    toggleBtn.title = 'Açık Temaya Geç';
+  }
+  
+  // Tema tercihini localStorage'a kaydet
+  localStorage.setItem('theme', body.classList.contains('light') ? 'light' : 'dark');
+});
+
+// Sayfa yüklendiğinde tema tercihini yükle
+document.addEventListener('DOMContentLoaded', () => {
+  const savedTheme = localStorage.getItem('theme');
+  const body = document.body;
+  const toggleBtn = document.getElementById('themeToggle');
+  
+  if (savedTheme === 'light') {
+    body.classList.add('light');
+    toggleBtn.innerHTML = '🌙';
+    toggleBtn.title = 'Koyu Temaya Geç';
+  } else {
+    toggleBtn.innerHTML = '☀️';
+    toggleBtn.title = 'Açık Temaya Geç';
+  }
+});
 
 /* ilk yük + periyodik */
 render();
