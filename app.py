@@ -11,10 +11,23 @@ from fastapi.responses import JSONResponse
 import math
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi import HTTPException
+from datetime import timedelta
 
 
 TR_LEVEL = {"GREEN": "YEŞİL", "YELLOW": "SARI", "RED": "KIRMIZI"}
 EMOJI = {"GREEN": "🟢", "YELLOW": "🟡", "RED": "🔴"}
+
+# --- CSV preview helpers ---
+
+def _find_ts_col(cols):
+    # CSV'deki muhtemel zaman damgası sütun adları
+    cands = ["CheckDate", "ts", "timestamp", "datetime", "created_at", "flightdate", "date"]
+    low = {c.lower(): c for c in cols}
+    for k in cands:
+        if k.lower() in low:
+            return low[k.lower()]
+    return None
 
 def _dedupe_by_minute(records):
     """Aynı dakika+checkpoint için en son kaydı bırak."""
@@ -186,6 +199,81 @@ def updater_loop():
 # arka planda CSV’yi izleyen thread
 threading.Thread(target=updater_loop, daemon=True).start()
 
+@app.get("/api/csv/latest")
+def csv_latest(limit: int = 50):
+    """
+    CSV'nin son N satırını gönderir (en yeni en üstte).
+    Sürüm farklarına tolerant: on_bad_lines / error_bad_lines fallback,
+    ayırıcıyı otomatik koklar (sep=None, engine='python').
+    """
+    path = os.path.abspath(CSV_PATH)
+    if not os.path.exists(path) or os.path.getsize(path) == 0:
+        return {"columns": [], "rows": []}
+
+    df = None
+    last_err = None
+
+    # 1) En modern yol
+    try:
+        df = pd.read_csv(path, engine="python", sep=None, on_bad_lines="skip")
+    except TypeError as e:
+        # eski pandas: on_bad_lines yok
+        last_err = e
+    except Exception as e:
+        last_err = e
+
+    # 2) Eski pandas için fallback
+    if df is None:
+        try:
+            # error_bad_lines / warn_bad_lines eski sürümlerde vardı
+            df = pd.read_csv(path, engine="python", sep=None,
+                             error_bad_lines=False, warn_bad_lines=False)  # type: ignore
+        except Exception as e:
+            last_err = e
+
+    # 3) Son çare: defaults
+    if df is None:
+        try:
+            df = pd.read_csv(path)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"read_csv failed: {e}; last_try: {last_err}")
+
+    if df.empty:
+        return {"columns": list(df.columns), "rows": []}
+
+    # Zaman sütunu varsa sırala
+    ts_col = _find_ts_col(df.columns)
+    if ts_col:
+        df[ts_col] = pd.to_datetime(df[ts_col], errors="coerce")
+        df = df.dropna(subset=[ts_col]).sort_values(ts_col)
+
+    # son N satır (en yeni en üstte göstereceğiz)
+    tail = df.tail(int(limit)).copy().reset_index(drop=True)
+
+    # datetime kolonlarını string yap
+    for c in tail.columns:
+        try:
+            if pd.api.types.is_datetime64_any_dtype(tail[c]):
+                tail[c] = tail[c].dt.strftime("%Y-%m-%d %H:%M:%S")
+        except Exception:
+            pass
+
+    # basit satır id'si
+    tail["__rowid"] = tail.index.astype(int)
+
+    # Kolon sırası: [ts, checkpoint_id, ... , __rowid]
+    cols = list(tail.columns)
+    ordered = []
+    if ts_col and ts_col in cols: ordered.append(ts_col)
+    if "checkpoint_id" in cols and "checkpoint_id" not in ordered: ordered.append("checkpoint_id")
+    for c in cols:
+        if c not in ordered and c != "__rowid":
+            ordered.append(c)
+    if "__rowid" in cols: ordered.append("__rowid")
+
+    rows = tail[ordered].to_dict(orient="records")[::-1]  # en yeni en üste
+    return {"columns": ordered, "rows": rows}
+
 @app.get("/health")
 def health():
     return {"ok": True, "csv": os.path.abspath(CSV_PATH)}
@@ -216,4 +304,89 @@ def set_capacity(payload: dict):
     officers[cp] = max(1, n)
     # mu güncellenir, sonraki döngüde rho/level güncel gelir
     return {"ok": True, "checkpoint_id": cp, "officers": officers[cp], "mu_per_officer": MU_PER_OFFICER}
+
+from datetime import timedelta
+
+@app.get("/api/metrics/last_minutes")
+def metrics_last_minutes(minutes: int = 60):
+    """
+    CSV'den okumaya dayanarak son N dakikanın tamamını (0'lar dahil)
+    dakika dakika döndürür. UI üst KPI'lar ve bar chart bu veriyi kullanabilir.
+    """
+    path = os.path.abspath(CSV_PATH)
+    if not os.path.exists(path) or os.path.getsize(path) == 0:
+        # Boş seri üret
+        end = pd.Timestamp.now().floor("T")
+        idx = pd.date_range(end=end, periods=minutes, freq="1T")
+        series = [{"ts": t.isoformat(), "count": 0} for t in idx]
+        return {
+            "series": series,
+            "kpis": {"total": 0, "avg_per_min": 0.0, "peak_count": 0, "peak_ts": None, "cp_count": 0},
+        }
+
+    # CSV'yi toleranslı oku (eşzamanlı yazımda sorun çıkmasın)
+    df = pd.read_csv(path, engine="python", on_bad_lines="skip", encoding_errors="ignore")
+    if df.empty:
+        end = pd.Timestamp.now().floor("T")
+        idx = pd.date_range(end=end, periods=minutes, freq="1T")
+        series = [{"ts": t.isoformat(), "count": 0} for t in idx]
+        return {
+            "series": series,
+            "kpis": {"total": 0, "avg_per_min": 0.0, "peak_count": 0, "peak_ts": None, "cp_count": 0},
+        }
+
+    # Zaman sütunu
+    ts_col = _find_ts_col(df.columns)
+    if ts_col is None:
+        raise HTTPException(status_code=400, detail=f"Zaman sütunu bulunamadı. Mevcut: {list(df.columns)}")
+
+    # Normalize et
+    if "checkpoint_id" not in df.columns:
+        df["checkpoint_id"] = "CP1"
+    df[ts_col] = pd.to_datetime(df[ts_col], errors="coerce")
+    df = df.dropna(subset=[ts_col])
+
+    # Hedef zaman aralığı: son N tam dakika
+    end = pd.Timestamp.now().floor("T")
+    start = end - pd.Timedelta(minutes=minutes-1)
+    # Dakikalık sayım
+    grp = (
+        df.set_index(ts_col)
+          .groupby("checkpoint_id")
+          .resample("1T").size()
+          .rename("n_t")
+          .reset_index()
+    )
+    # Her CP için eksik dakikaları 0 ile doldur, sonra aralığa kırp
+    frames = []
+    for cp, g in grp.groupby("checkpoint_id"):
+        g = g.set_index(ts_col).asfreq("1T")
+        g["n_t"] = g["n_t"].fillna(0).astype(int)
+        g["checkpoint_id"] = cp
+        g = g.loc[start:end].reset_index()
+        frames.append(g)
+    if frames:
+        res = pd.concat(frames, ignore_index=True)
+    else:
+        res = pd.DataFrame(columns=[ts_col, "checkpoint_id", "n_t"])
+
+    # Toplam (tüm CP'ler) dakika dakika
+    total_per_min = (
+        res.groupby(ts_col)["n_t"].sum()
+          .reindex(pd.date_range(start=start, end=end, freq="1T"), fill_value=0)
+    )
+    series = [{"ts": t.isoformat(), "count": int(c)} for t, c in total_per_min.items()]
+
+    # KPI'lar
+    total = int(total_per_min.sum())
+    avg = float(total_per_min.mean()) if len(total_per_min) else 0.0
+    peak_count = int(total_per_min.max()) if len(total_per_min) else 0
+    peak_ts = (
+        total_per_min.idxmax().isoformat() if len(total_per_min) and peak_count > 0 else None
+    )
+    cp_count = res["checkpoint_id"].nunique() if not res.empty else 0
+
+    return {"series": series,
+            "kpis": {"total": total, "avg_per_min": round(avg, 2),
+                     "peak_count": peak_count, "peak_ts": peak_ts, "cp_count": int(cp_count)}}
 

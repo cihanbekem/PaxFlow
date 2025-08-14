@@ -14,32 +14,59 @@
       :root{ --bg:#f6f7f9; --fg:#0f172a; --muted:#475569; --card:#ffffff; --ring:#e2e8f0; }
     }
     *{box-sizing:border-box}
-    body{margin:0;background:radial-gradient(1200px 600px at 10% -10%, #1d2845 0, transparent 60%),
-                       radial-gradient(1000px 500px at 110% 0%, #14213d 0, transparent 60%), var(--bg);
-         color:var(--fg); font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial}
+    body{
+      margin:0;
+      background:
+        radial-gradient(1200px 600px at 10% -10%, #1d2845 0, transparent 60%),
+        radial-gradient(1000px 500px at 110% 0%, #14213d 0, transparent 60%),
+        var(--bg);
+      color:var(--fg); font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial
+    }
     .container{max-width:1180px;margin:28px auto;padding:0 16px}
     .header{display:flex;align-items:center;gap:12px;justify-content:space-between;margin-bottom:18px}
     .h1{font-weight:800;font-size:22px;letter-spacing:.2px}
     .badge{font-weight:700;font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid var(--ring);background:rgba(255,255,255,.03)}
     .toggle{cursor:pointer;border:1px solid var(--ring);border-radius:12px;padding:6px 10px;background:transparent;color:var(--fg)}
+
+    /* KPIs */
+    .kpiGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:8px 0 18px}
+    @media (max-width:900px){ .kpiGrid{grid-template-columns:repeat(2,1fr)} }
+    .kpiCard{background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));border:1px solid var(--ring);border-radius:14px;padding:12px}
+    .kpiLabel{color:var(--muted);font-size:12px}
+    .kpiValue{font-weight:900;font-size:22px}
+    .kpiSub{font-size:12px;color:var(--muted)}
+
+    /* Panel */
+    .panel{background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));border:1px solid var(--ring);border-radius:16px;padding:16px;margin-bottom:18px}
+    .panel .title{font-weight:700;margin-bottom:8px}
+    .muted{color:var(--muted);font-size:12px}
+
+    /* Kartlar */
     .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
-    .card{position:relative;background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
-          border:1px solid var(--ring);border-radius:16px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.18)}
+    .card{position:relative;background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));border:1px solid var(--ring);border-radius:16px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.18)}
     .row{display:flex;align-items:center;justify-content:space-between;gap:10px}
-    .title{font-weight:700;font-size:16px;display:flex;align-items:center;gap:8px}
+    .titleRow{font-weight:700;font-size:16px;display:flex;align-items:center;gap:8px}
     .level{font-weight:800;padding:6px 10px;border-radius:12px}
     .level.green{color:var(--green);background:var(--green-bg);border:1px solid rgba(22,163,74,.35)}
     .level.yellow{color:var(--yellow);background:var(--yellow-bg);border:1px solid rgba(234,179,8,.35)}
     .level.red{color:var(--red);background:var(--red-bg);border:1px solid rgba(239,68,68,.35)}
     .big{font-weight:900;font-size:28px;letter-spacing:.4px}
-    .kpi{background:rgba(255,255,255,.04);border:1px solid var(--ring);border-radius:10px;padding:10px;text-align:center}
-    .muted{color:var(--muted);font-size:12px}
-    .spark{width:100%;height:48px;margin-top:10px}
     .controls{display:flex;align-items:center;gap:8px;margin-top:8px}
     .btn{cursor:pointer;border:1px solid var(--ring);background:rgba(255,255,255,.04);color:var(--fg);padding:6px 10px;border-radius:10px}
+    .spark{width:100%;height:48px;margin-top:10px}
     .footer{margin-top:6px;display:flex;justify-content:space-between;align-items:center}
     .advice{font-size:12px;color:var(--fg)}
     .time{font-size:12px;color:var(--muted)}
+
+    .tableWrap{overflow:auto; max-height:320px; border:1px solid var(--ring); border-radius:12px}
+.table{width:100%; border-collapse:collapse; font-size:12px}
+.table th, .table td{padding:8px 10px; border-bottom:1px solid var(--ring); white-space:nowrap}
+.table th{position:sticky; top:0; background:rgba(255,255,255,.06); z-index:1; text-align:left}
+.rowNew{animation:flash 1.2s ease}
+@keyframes flash{ from{background:rgba(34,197,94,.25)} to{background:transparent} }
+
+
+    
   </style>
 </head>
 <body>
@@ -52,8 +79,50 @@
       </div>
     </div>
 
+    <!-- KPIs -->
+    <div class="kpiGrid">
+      <div class="kpiCard">
+        <div class="kpiLabel">Son 1 saatte toplam</div>
+        <div id="kpiTotal" class="kpiValue">—</div>
+      </div>
+      <div class="kpiCard">
+        <div class="kpiLabel">Dakika başı ortalama</div>
+        <div id="kpiAvg" class="kpiValue">— kişi/dk</div>
+      </div>
+      <div class="kpiCard">
+        <div class="kpiLabel">Pik dakika</div>
+        <div id="kpiPeak" class="kpiValue">— kişi</div>
+        <div id="kpiPeakTime" class="kpiSub">—</div>
+      </div>
+      <div class="kpiCard">
+        <div class="kpiLabel">Aktif kontrol noktası</div>
+        <div id="kpiCpCount" class="kpiValue">—</div>
+      </div>
+    </div>
+
+    <!-- Toplam geçiş grafiği -->
+    <div class="panel">
+      <div class="title">Son 60 dk: Dakika başına geçen kişi (tüm CP’lerin toplamı)</div>
+      <div id="chartHour"></div>
+      <div class="muted">Son 60 dakikadaki her dakika için toplam geçiş sayısı. Pik ve ortalama üstte.</div>
+    </div>
+
+    
+    <!-- CSV canlı akış tablosu -->
+<div class="panel">
+    <div class="title">CSV Canlı Akış (son 50 satır)</div>
+    <div id="csvWrap" class="tableWrap">
+      <table id="csvTable" class="table"></table>
+    </div>
+    <div class="muted">Her 3 sn’de bir yenilenir. Yeni gelen satırlar kısa süre vurgulanır.</div>
+  </div>
+
+  
+    <!-- CP kartları -->
     <div id="grid" class="grid"></div>
   </div>
+
+  
 
   <script src="./app.js"></script>
 </body>
