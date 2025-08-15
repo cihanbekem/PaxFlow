@@ -98,6 +98,173 @@ async function apiSetOfficers(cp, count) {
   });
 }
 // Yeni: CSV tabanlı metrik (varsa kullan; yoksa fallback yapacağız)
+
+// Destinasyon istatistikleri API çağrısı
+async function apiDestinations() {
+  try {
+    const r = await fetch('/api/destinations');
+    return await r.json();
+  } catch (e) {
+    console.error('Destinasyon verisi alınamadı:', e);
+    return { destinations: [] };
+  }
+}
+
+
+
+
+
+// Anlık ρ API çağrısı
+async function apiCurrentRho() {
+  try {
+    const r = await fetch('/api/current-rho');
+    return await r.json();
+  } catch (e) {
+    console.error('Anlık ρ verisi alınamadı:', e);
+    return { rho: 0.0, lambda_hat: 0.0, mu: 0.0 };
+  }
+}
+
+// Pie chart oluşturma fonksiyonu
+function createPieChart(data, width = 400, height = 300) {
+  if (!data || data.length === 0) {
+    return `<svg viewBox="0 0 ${width} ${height}" style="width:100%;height:${height}px">
+      <text x="${width/2}" y="${height/2}" text-anchor="middle" fill="#94a3b8" font-size="14">Veri yok</text>
+    </svg>`;
+  }
+
+  const radius = Math.min(width, height) / 2 - 40;
+  const centerX = width / 2;
+  const centerY = height / 2;
+  
+  // Renk paleti
+  const colors = [
+    '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
+    '#06b6d4', '#84cc16', '#f97316', '#ec4899', '#6366f1'
+  ];
+
+  let currentAngle = 0;
+  const total = data.reduce((sum, item) => sum + item.count, 0);
+  
+  const slices = [];
+  const labels = [];
+  const legend = [];
+
+  data.forEach((item, index) => {
+    const percentage = (item.count / total) * 100;
+    const angle = (item.count / total) * 2 * Math.PI;
+    const endAngle = currentAngle + angle;
+    
+    // Pie slice
+    const x1 = centerX + radius * Math.cos(currentAngle);
+    const y1 = centerY + radius * Math.sin(currentAngle);
+    const x2 = centerX + radius * Math.cos(endAngle);
+    const y2 = centerY + radius * Math.sin(endAngle);
+    
+    const largeArcFlag = angle > Math.PI ? 1 : 0;
+    
+    const pathData = [
+      `M ${centerX} ${centerY}`,
+      `L ${x1} ${y1}`,
+      `A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2}`,
+      'Z'
+    ].join(' ');
+    
+    slices.push(
+      `<path d="${pathData}" fill="${colors[index % colors.length]}" stroke="#1e293b" stroke-width="2"/>`
+    );
+    
+    // Label (sadece büyük dilimler için)
+    if (percentage > 5) {
+      const labelAngle = currentAngle + angle / 2;
+      const labelRadius = radius * 0.7;
+      const labelX = centerX + labelRadius * Math.cos(labelAngle);
+      const labelY = centerY + labelRadius * Math.sin(labelAngle);
+      
+      labels.push(
+        `<text x="${labelX}" y="${labelY}" text-anchor="middle" dominant-baseline="middle" 
+               fill="white" font-size="12" font-weight="bold">${item.destination}</text>`
+      );
+    }
+    
+    // Legend
+    const legendY = 20 + index * 20;
+    legend.push(
+      `<rect x="10" y="${legendY - 8}" width="12" height="12" fill="${colors[index % colors.length]}" rx="2"/>`,
+      `<text x="30" y="${legendY}" fill="#e5e7eb" font-size="12">${item.destination} (${item.count} - %${item.percentage})</text>`
+    );
+    
+    currentAngle = endAngle;
+  });
+
+  return `<svg viewBox="0 0 ${width} ${height}" style="width:100%;height:${height}px">
+    ${slices.join('')}
+    ${labels.join('')}
+    <g transform="translate(${width - 200}, 0)">
+      ${legend.join('')}
+    </g>
+  </svg>`;
+}
+
+
+
+
+
+// Gauge chart oluşturma fonksiyonu (ρ göstergesi için)
+function createGaugeChart(rho, width = 200, height = 150) {
+  const radius = Math.min(width, height) * 0.8;
+  const centerX = width / 2;
+  const centerY = height * 0.8;
+  
+  // Gauge aralıkları
+  const maxRho = 3.0; // Maksimum ρ değeri
+  const clampedRho = Math.min(rho, maxRho);
+  const percentage = (clampedRho / maxRho) * 100;
+  
+  // Renk belirleme
+  let color = "#16a34a"; // GREEN
+  if (percentage > 70) color = "#ef4444"; // RED
+  else if (percentage > 30) color = "#eab308"; // YELLOW
+  
+  // Gauge arka planı (yarım daire)
+  const backgroundPath = [
+    `M ${centerX - radius} ${centerY}`,
+    `A ${radius} ${radius} 0 0 1 ${centerX + radius} ${centerY}`
+  ].join(' ');
+  
+  // Gauge değeri (yarım daire)
+  const angle = (percentage / 100) * Math.PI;
+  const endX = centerX + radius * Math.cos(Math.PI - angle);
+  const endY = centerY - radius * Math.sin(Math.PI - angle);
+  
+  const valuePath = [
+    `M ${centerX - radius} ${centerY}`,
+    `A ${radius} ${radius} 0 0 1 ${endX} ${endY}`
+  ].join(' ');
+  
+  // İbre (gösterge çizgisi)
+  const needleX = centerX + (radius * 0.9) * Math.cos(Math.PI - angle);
+  const needleY = centerY - (radius * 0.9) * Math.sin(Math.PI - angle);
+  
+  return `<svg viewBox="0 0 ${width} ${height}" style="width:100%;height:${height}px">
+    <!-- Arka plan -->
+    <path d="${backgroundPath}" fill="none" stroke="#334155" stroke-width="8" stroke-linecap="round"/>
+    
+    <!-- Değer -->
+    <path d="${valuePath}" fill="none" stroke="${color}" stroke-width="8" stroke-linecap="round"/>
+    
+    <!-- İbre -->
+    <line x1="${centerX}" y1="${centerY}" x2="${needleX}" y2="${needleY}" 
+          stroke="#e5e7eb" stroke-width="2" stroke-linecap="round"/>
+    
+    <!-- Merkez nokta -->
+    <circle cx="${centerX}" cy="${centerY}" r="4" fill="#e5e7eb"/>
+    
+    <!-- Değer metni -->
+    <text x="${centerX}" y="${centerY + radius * 0.25}" text-anchor="middle" fill="#e5e7eb" font-size="14" font-weight="bold">ρ ${rho}</text>
+    <text x="${centerX}" y="${centerY + radius * 0.4}" text-anchor="middle" fill="#94a3b8" font-size="10">${percentage.toFixed(1)}%</text>
+  </svg>`;
+}
 async function apiMetricsLast(minutes = 60) {
   try {
     const r = await fetch(`/api/metrics/last_minutes?minutes=${minutes}`);
@@ -173,11 +340,13 @@ function renderCsvTable(data, prevIds) {
 
 // ====== render ======
 async function render() {
-  const [summary, latest, metrics, csvDataOrNull] = await Promise.all([
+  const [summary, latest, metrics, csvDataOrNull, destinations, currentRho] = await Promise.all([
     apiSummary(),
     apiLatest(),
     apiMetricsLast(60),      // varsa kullanacağız
     (async () => { try { return await apiCsvLatest(50); } catch { return null; } })(),
+    apiDestinations(),       // destinasyon istatistikleri
+    apiCurrentRho(),         // anlık ρ
   ]);
 
   document.getElementById('lastUpdated').textContent =
@@ -220,6 +389,23 @@ async function render() {
   if (chartEl) {
     const w = Math.max(chartEl.clientWidth || 1100, 600);
     chartEl.innerHTML = barChartSVG(series, w, 180);
+  }
+
+  // Destinasyon pie chart
+  const destinationsChartEl = document.getElementById('destinationsChart');
+  if (destinationsChartEl && destinations.destinations) {
+    const w = Math.max(destinationsChartEl.clientWidth || 600, 400);
+    const h = Math.max(destinationsChartEl.clientHeight || 200, 150);
+    destinationsChartEl.innerHTML = createPieChart(destinations.destinations, w, h);
+  }
+
+
+
+  // Anlık ρ gauge chart
+  const rhoGaugeEl = document.getElementById('rhoGauge');
+  if (rhoGaugeEl && currentRho) {
+    const w = Math.max(rhoGaugeEl.clientWidth || 200, 150);
+    rhoGaugeEl.innerHTML = createGaugeChart(currentRho.rho, w, 150);
   }
 
   // ---- CP KARTLARI ----

@@ -84,7 +84,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CSV_PATH = os.getenv("CSV_PATH", os.path.join(BASE_DIR, "flight_data.csv"))
 BUCKET = "1min"          # 1 dakika
 ALPHA = 0.25           # EWMA
-MU_PER_OFFICER = 0.50  # kişi/dk (örnek)
+MU_PER_OFFICER = 3.0  # kişi/dk (örnek)
 GREEN, YELLOW = 0.7, 0.9
 
 app = FastAPI(title="EWMA Boarding Load")
@@ -357,3 +357,160 @@ def metrics_last_minutes(minutes: int = 60):
             "kpis": {"total": total, "avg_per_min": round(avg, 2),
                      "peak_count": peak_count, "peak_ts": peak_ts, "cp_count": int(cp_count)}}
 
+@app.get("/api/destinations")
+def get_destination_stats():
+    """En çok gidilen destinasyonları döndür"""
+    try:
+        if not os.path.exists(CSV_PATH) or os.path.getsize(CSV_PATH) == 0:
+            return {"destinations": []}
+        
+        df = pd.read_csv(CSV_PATH)
+        if df.empty or "DestinationAirport" not in df.columns:
+            return {"destinations": []}
+        
+        # Destinasyon sayılarını hesapla
+        dest_counts = df["DestinationAirport"].value_counts()
+        
+        # Top 10 destinasyonu al
+        top_destinations = dest_counts.head(10)
+        
+        # Toplam sayıyı hesapla
+        total_flights = len(df)
+        
+        # Yüzde hesapla ve formatla
+        destinations = []
+        for dest, count in top_destinations.items():
+            percentage = (count / total_flights) * 100
+            destinations.append({
+                "destination": str(dest),
+                "count": int(count),
+                "percentage": round(percentage, 1)
+            })
+        
+        return {"destinations": destinations, "total_flights": total_flights}
+        
+    except Exception as e:
+        return {"destinations": [], "error": str(e)}
+
+@app.get("/api/color-durations")
+def get_color_durations():
+    """Son 60 dakikadaki renk sürelerini döndür"""
+    try:
+        with lock:
+            data = list(recent)
+        
+        if not data:
+            return {"colors": {"GREEN": 0, "YELLOW": 0, "RED": 0}, "total_minutes": 0}
+        
+        # Son 60 dakikayı al
+        data = _dedupe_by_minute(data)[-60:]
+        
+        # Renk sayılarını hesapla
+        color_counts = {"GREEN": 0, "YELLOW": 0, "RED": 0}
+        for record in data:
+            level = record.get("level", "GREEN")
+            color_counts[level] += 1
+        
+        total_minutes = len(data)
+        
+        return {"colors": color_counts, "total_minutes": total_minutes}
+        
+    except Exception as e:
+        return {"colors": {"GREEN": 0, "YELLOW": 0, "RED": 0}, "total_minutes": 0, "error": str(e)}
+
+@app.get("/api/warning-durations")
+def get_warning_durations():
+    """RED durumunun üst üste kaç dakika sürdüğünü döndür"""
+    try:
+        with lock:
+            data = list(recent)
+        
+        if not data:
+            return {"durations": [], "max_red_streak": 0}
+        
+        # Son 60 dakikayı al
+        data = _dedupe_by_minute(data)[-60:]
+        
+        # Her CP için RED streak'lerini hesapla
+        cp_red_streaks = {}
+        current_streaks = {}
+        
+        for record in data:
+            cp = record.get("checkpoint_id", "CP1")
+            level = record.get("level", "GREEN")
+            
+            if level == "RED":
+                # RED streak'i artır
+                current_streaks[cp] = current_streaks.get(cp, 0) + 1
+            else:
+                # RED streak'i bitir ve kaydet
+                if cp in current_streaks and current_streaks[cp] > 0:
+                    if cp not in cp_red_streaks:
+                        cp_red_streaks[cp] = []
+                    cp_red_streaks[cp].append(current_streaks[cp])
+                current_streaks[cp] = 0
+        
+        # Aktif streak'leri de ekle
+        for cp, streak in current_streaks.items():
+            if streak > 0:
+                if cp not in cp_red_streaks:
+                    cp_red_streaks[cp] = []
+                cp_red_streaks[cp].append(streak)
+        
+        # Sonuçları formatla
+        durations = []
+        max_red_streak = 0
+        
+        for cp, streaks in cp_red_streaks.items():
+            if streaks:
+                max_streak = max(streaks)
+                max_red_streak = max(max_red_streak, max_streak)
+                durations.append({
+                    "checkpoint": cp,
+                    "max_streak": max_streak,
+                    "current_streak": current_streaks.get(cp, 0),
+                    "total_red_minutes": sum(streaks)
+                })
+        
+        # CP'ye göre sırala
+        durations.sort(key=lambda x: x["checkpoint"])
+        
+        return {
+            "durations": durations,
+            "max_red_streak": max_red_streak
+        }
+        
+    except Exception as e:
+        return {"durations": [], "max_red_streak": 0, "error": str(e)}
+
+@app.get("/api/current-rho")
+def get_current_rho():
+    """CP1'in ρ değerini döndür (CP kartındaki ile aynı)"""
+    try:
+        with lock:
+            data = list(recent)
+        
+        if not data:
+            return {"rho": 0.0, "lambda_hat": 0.0, "mu": 0.0}
+        
+        # CP1'in en son kaydını bul
+        cp1_data = [r for r in data if r.get("checkpoint_id") == "CP1"]
+        
+        if not cp1_data:
+            return {"rho": 0.0, "lambda_hat": 0.0, "mu": 0.0}
+        
+        # En son CP1 kaydını al
+        latest_cp1 = cp1_data[-1]
+        
+        rho = latest_cp1.get("rho", 0.0)
+        lambda_hat = latest_cp1.get("lambda_hat", 0.0)
+        mu = latest_cp1.get("mu", 0.0)
+        
+        return {
+            "rho": round(rho, 3),
+            "lambda_hat": round(lambda_hat, 3),
+            "mu": round(mu, 3)
+        }
+        
+    except Exception as e:
+        return {"rho": 0.0, "lambda_hat": 0.0, "mu": 0.0, "error": str(e)}

@@ -42,13 +42,13 @@
     .kpiSub{font-size:12px;color:var(--muted)}
 
     /* Panel */
-    .panel{background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));border:1px solid var(--ring);border-radius:16px;padding:16px;margin-bottom:18px}
+    .panel{background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));border:1px solid var(--ring);border-radius:16px;padding:16px;margin-bottom:18px;height:280px;display:flex;flex-direction:column}
     .panel .title{font-weight:700;margin-bottom:8px}
     .muted{color:var(--muted);font-size:12px}
 
     /* Kartlar */
     .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
-    .card{position:relative;background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));border:1px solid var(--ring);border-radius:16px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.18)}
+    .card{position:relative;background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));border:1px solid var(--ring);border-radius:16px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.18);height:280px;display:flex;flex-direction:column}
     .row{display:flex;align-items:center;justify-content:space-between;gap:10px}
     .titleRow{font-weight:700;font-size:16px;display:flex;align-items:center;gap:8px}
     .level{font-weight:800;padding:6px 10px;border-radius:12px}
@@ -70,7 +70,8 @@
 .rowNew{animation:flash 1.2s ease}
 @keyframes flash{ from{background:rgba(34,197,94,.25)} to{background:transparent} }
 
-
+    /* Pie Chart */
+    .pieChart{width:100%;height:100%;margin:0}
     
   </style>
 </head>
@@ -81,6 +82,19 @@
       <div>
         <span id="lastUpdated" class="badge">—</span>
         <button id="themeToggle" class="toggle" title="Açık Temaya Geç">☀️</button>
+      </div>
+    </div>
+
+    <!-- CP kartları ve ρ göstergesi -->
+    <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 0; margin-bottom: 18px;">
+      <!-- CP kartları -->
+      <div id="grid" class="grid"></div>
+      
+      <!-- Anlık ρ göstergesi -->
+      <div class="panel">
+        <div class="title">Anlık ρ Göstergesi</div>
+        <div id="rhoGauge" class="pieChart"></div>
+        <div class="muted">Toplam λ̂/μ için yarım daire gauge.</div>
       </div>
     </div>
 
@@ -107,7 +121,7 @@
 
     <!-- Toplam geçiş grafiği -->
     <div class="panel">
-      <div class="title">Son 60 dk: Dakika başına geçen kişi (tüm CP’lerin toplamı)</div>
+      <div class="title">Son 60 dk: Dakika başına geçen kişi (tüm CP'lerin toplamı)</div>
       <div id="chartHour"></div>
       <div class="muted">Son 60 dakikadaki her dakika için toplam geçiş sayısı. Pik ve ortalama üstte.</div>
     </div>
@@ -119,12 +133,15 @@
     <div id="csvWrap" class="tableWrap">
       <table id="csvTable" class="table"></table>
     </div>
-    <div class="muted">Her 3 sn’de bir yenilenir. Yeni gelen satırlar kısa süre vurgulanır.</div>
+    <div class="muted">Her 3 sn'de bir yenilenir. Yeni gelen satırlar kısa süre vurgulanır.</div>
   </div>
 
-  
-    <!-- CP kartları -->
-    <div id="grid" class="grid"></div>
+  <!-- Destinasyon dağılımı pie chart -->
+  <div class="panel" style="height: 320px;">
+    <div class="title">En Çok Gidilen Destinasyonlar</div>
+    <div id="destinationsChart" class="pieChart" style="flex: 1; min-height: 0;"></div>
+    <div class="muted">Tüm uçuşların destinasyon dağılımı (top 10).</div>
+  </div>
   </div>
 
   

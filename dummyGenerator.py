@@ -11,8 +11,8 @@ def random_masked_name():
     return f"{first_name_initial}*** {last_name_initial}***"
 
 pnr_list = ["E3*****", "ET*****", "PM*****", "EY*****", "EW*****", "EV*****"]
-origin_airports = ["DLM", "IST", "SAW", "ESB"]
-destination_airports = ["AMS", "GYD", "SAW", "IST", "ESB"]
+origin_airports = ["DLM"]
+destination_airports = ["AMS", "FRA", "MUC", "ZRH", "VIE", "PRG", "BUD", "ATH", "LIS", "GYD", "SAW", "IST", "ESB"]
 iata_codes = ["TK", "PC", "VF", "J2", "HV", "ZF"]
 flight_numbers = ["2555", "3121", "404", "062", "4071", "2285"]
 error_reasons = ["Bilet Tarihi Uyumsuz!", "PNR Geçersiz!", "Uçuş Bulunamadı!", "Bilet Kullanılmış!"]
