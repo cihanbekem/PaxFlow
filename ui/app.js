@@ -129,7 +129,7 @@ async function apiCurrentRho() {
 function createPieChart(data, width = 400, height = 300) {
   if (!data || data.length === 0) {
     return `<svg viewBox="0 0 ${width} ${height}" style="width:100%;height:${height}px">
-      <text x="${width/2}" y="${height/2}" text-anchor="middle" fill="#94a3b8" font-size="14">Veri yok</text>
+      <text x="${width/2}" y="${height/2}" text-anchor="middle" fill="var(--muted)" font-size="14">Veri yok</text>
     </svg>`;
   }
 
@@ -171,7 +171,7 @@ function createPieChart(data, width = 400, height = 300) {
     ].join(' ');
     
     slices.push(
-      `<path d="${pathData}" fill="${colors[index % colors.length]}" stroke="#1e293b" stroke-width="2"/>`
+      `<path d="${pathData}" fill="${colors[index % colors.length]}" stroke="var(--border)" stroke-width="2"/>`
     );
     
     // Label (sadece büyük dilimler için)
@@ -191,7 +191,7 @@ function createPieChart(data, width = 400, height = 300) {
     const legendY = 20 + index * 20;
     legend.push(
       `<rect x="10" y="${legendY - 8}" width="12" height="12" fill="${colors[index % colors.length]}" rx="2"/>`,
-      `<text x="30" y="${legendY}" fill="#e5e7eb" font-size="12">${item.destination} (${item.count} - %${item.percentage})</text>`
+      `<text x="30" y="${legendY}" fill="currentColor" font-size="12">${item.destination} (${item.count} - %${item.percentage})</text>`
     );
     
     currentAngle = endAngle;
@@ -221,10 +221,10 @@ function createGaugeChart(rho, width = 200, height = 150) {
   const clampedRho = Math.min(rho, maxRho);
   const percentage = (clampedRho / maxRho) * 100;
   
-  // Renk belirleme
+  // Renk belirleme (backend ile aynı mantık)
   let color = "#16a34a"; // GREEN
-  if (percentage > 70) color = "#ef4444"; // RED
-  else if (percentage > 30) color = "#eab308"; // YELLOW
+  if (rho >= 0.9) color = "#ef4444"; // RED
+  else if (0.9 > rho >= 0.7) color = "#eab308"; // YELLOW
   
   // Gauge arka planı (yarım daire)
   const backgroundPath = [
@@ -261,8 +261,8 @@ function createGaugeChart(rho, width = 200, height = 150) {
     <circle cx="${centerX}" cy="${centerY}" r="4" fill="#e5e7eb"/>
     
     <!-- Değer metni -->
-    <text x="${centerX}" y="${centerY + radius * 0.25}" text-anchor="middle" fill="#e5e7eb" font-size="14" font-weight="bold">ρ ${rho}</text>
-    <text x="${centerX}" y="${centerY + radius * 0.4}" text-anchor="middle" fill="#94a3b8" font-size="10">${percentage.toFixed(1)}%</text>
+    <text x="${centerX}" y="${centerY + radius * 0.25}" text-anchor="middle" fill="currentColor" font-size="14" font-weight="bold">ρ ${rho}</text>
+    <text x="${centerX}" y="${centerY + radius * 0.4}" text-anchor="middle" fill="var(--muted)" font-size="10">${percentage.toFixed(1)}%</text>
   </svg>`;
 }
 async function apiMetricsLast(minutes = 60) {
