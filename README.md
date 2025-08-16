@@ -36,9 +36,7 @@ Check‐in/boarding kapılarındaki **anlık yoğunluğu (ρ = λ̂ / μ)** izle
 ├─ Dockerfile
 └─ docker-compose.yml
 
-yaml
-Kopyala
-Düzenle
+
 
 ---
 
@@ -53,8 +51,7 @@ mkdir -p data
 [ -f data/flight_data.csv ] || touch data/flight_data.csv
 2) Geliştirme modu (hot-reload) + dummy veri
 bash
-Kopyala
-Düzenle
+
 docker compose up --build app-dev generator
 Aç:
 
@@ -67,8 +64,7 @@ Health → http://localhost:8000/health
 Faydalı komutlar:
 
 bash
-Kopyala
-Düzenle
+
 docker compose ps
 docker compose logs -f app-dev
 docker compose logs -f generator
@@ -82,31 +78,27 @@ Gerekenler: Python 3.11+, pip
 macOS / Linux
 
 bash
-Kopyala
-Düzenle
+
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 Windows (PowerShell)
 
 powershell
-Kopyala
-Düzenle
+
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 2) CSV ve uygulama
-bash
-Kopyala
-Düzenle
+
+
 mkdir -p data && [ -f data/flight_data.csv ] || touch data/flight_data.csv
 python -m uvicorn backend.app:app --reload --port 8000
 Aç: http://localhost:8000/ui/index.html
 
 3) (Opsiyonel) Dummy veri üreticisi
-bash
-Kopyala
-Düzenle
+
+
 python scripts/dummyGenerator.py --out data/flight_data.csv
 ⚙️ Yapılandırma (ENV)
 docker-compose.yml içinde set edilir; lokalde de export / $env: ile verebilirsin.
@@ -146,7 +138,6 @@ CSV okunmuyor → data/flight_data.csv var mı? Volume yolu/izinler doğru mu? G
 
 Dummy generator modül hataları (pandas, openpyxl) → requirements.txt’e ekle ve yeniden build et; ya da generator’ı paxboard:dev imajından koştur.
 ## Çalıştırma
-uvicorn app:app --reload --port 8000
 http://127.0.0.1:8000/ui
 
 
