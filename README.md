@@ -23,19 +23,19 @@ Check‐in/boarding kapılarındaki anlık yoğunluğu (ρ = λ̂ / μ) izleyen,
 🧪 Opsiyonel dummy veri üreticisi.
 
 **📂 Dizin Yapısı**
-.
-├─ backend/
-│  └─ app.py              # FastAPI (API + CSV watcher + EWMA)
-├─ ui/
-│  ├─ index.html          # Panel (statik)
-│  └─ app.js              # UI mantığı (fetch & çizimler)
-├─ data/
-│  └─ flight_data.csv     # Veri kaynağı (host↔container RW volume)
-├─ scripts/
-│  └─ dummyGenerator.py   # Opsiyonel: örnek veri üreticisi
-├─ requirements.txt
-├─ Dockerfile
-└─ docker-compose.yml
+**.
+**├─ backend/
+**│  └─ app.py              # FastAPI (API + CSV watcher + EWMA)
+**├─ ui/
+**│  ├─ index.html          # Panel (statik)
+**│  └─ app.js              # UI mantığı (fetch & çizimler)
+**├─ data/
+**│  └─ flight_data.csv     # Veri kaynağı (host↔container RW volume)
+**├─ scripts/
+**│  └─ dummyGenerator.py   # Opsiyonel: örnek veri üreticisi
+**├─ requirements.txt
+**├─ Dockerfile
+**└─ docker-compose.yml
 
 **🐳 Hızlı Başlangıç — Docker ile**
 
