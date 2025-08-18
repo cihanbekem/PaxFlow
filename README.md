@@ -1,4 +1,4 @@
-✈️ PaxFlow — Boarding Pass Yoğunluk Paneli
+#✈️ PaxFlow — Boarding Pass Yoğunluk Paneli
 
 Check‐in/boarding kapılarındaki anlık yoğunluğu (ρ = λ̂ / μ) izleyen, EWMA ile akışı yumuşatan ve görevli sayısına göre kapasiteyi hesaplayıp renkli uyarılar + öneriler üreten hafif bir panel.
 
@@ -6,7 +6,7 @@ Check‐in/boarding kapılarındaki anlık yoğunluğu (ρ = λ̂ / μ) izleyen,
 
 📑 API Docs (Swagger): http://localhost:8000/docs
 
-🚀 Özellikler
+##🚀 Özellikler
 
 ⏱️ Dakikalık akış: CSV’den dakikadaki kişi sayısı (n_t) çıkarılır (eksik dakikalar 0 ile doldurulur).
 
@@ -22,7 +22,7 @@ Check‐in/boarding kapılarındaki anlık yoğunluğu (ρ = λ̂ / μ) izleyen,
 
 🧪 Opsiyonel dummy veri üreticisi.
 
-📂 Dizin Yapısı
+###📂 Dizin Yapısı
 .
 ├─ backend/
 │  └─ app.py              # FastAPI (API + CSV watcher + EWMA)
@@ -37,7 +37,7 @@ Check‐in/boarding kapılarındaki anlık yoğunluğu (ρ = λ̂ / μ) izleyen,
 ├─ Dockerfile
 └─ docker-compose.yml
 
-🐳 Hızlı Başlangıç — Docker ile
+####🐳 Hızlı Başlangıç — Docker ile
 
 Önkoşul: Docker Desktop (Compose v2).
 
@@ -66,7 +66,7 @@ docker compose down
 
 💡 Not: Generator servisi CSV’ye yazdıkça panelde canlı akış ve metrikler yenilenir.
 
-🧑‍💻 Lokal Çalıştırma (Docker Olmadan)
+#####🧑‍💻 Lokal Çalıştırma (Docker Olmadan)
 
 Gerekenler: Python 3.11+, pip
 
