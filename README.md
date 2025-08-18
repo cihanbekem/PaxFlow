@@ -1,4 +1,4 @@
-#✈️ PaxFlow — Boarding Pass Yoğunluk Paneli
+**✈️ PaxFlow — Boarding Pass Yoğunluk Paneli**
 
 Check‐in/boarding kapılarındaki anlık yoğunluğu (ρ = λ̂ / μ) izleyen, EWMA ile akışı yumuşatan ve görevli sayısına göre kapasiteyi hesaplayıp renkli uyarılar + öneriler üreten hafif bir panel.
 
@@ -6,7 +6,7 @@ Check‐in/boarding kapılarındaki anlık yoğunluğu (ρ = λ̂ / μ) izleyen,
 
 📑 API Docs (Swagger): http://localhost:8000/docs
 
-##🚀 Özellikler
+**🚀 Özellikler**
 
 ⏱️ Dakikalık akış: CSV’den dakikadaki kişi sayısı (n_t) çıkarılır (eksik dakikalar 0 ile doldurulur).
 
@@ -22,7 +22,7 @@ Check‐in/boarding kapılarındaki anlık yoğunluğu (ρ = λ̂ / μ) izleyen,
 
 🧪 Opsiyonel dummy veri üreticisi.
 
-###📂 Dizin Yapısı
+**📂 Dizin Yapısı**
 .
 ├─ backend/
 │  └─ app.py              # FastAPI (API + CSV watcher + EWMA)
@@ -37,7 +37,7 @@ Check‐in/boarding kapılarındaki anlık yoğunluğu (ρ = λ̂ / μ) izleyen,
 ├─ Dockerfile
 └─ docker-compose.yml
 
-####🐳 Hızlı Başlangıç — Docker ile
+**🐳 Hızlı Başlangıç — Docker ile**
 
 Önkoşul: Docker Desktop (Compose v2).
 
@@ -66,7 +66,7 @@ docker compose down
 
 💡 Not: Generator servisi CSV’ye yazdıkça panelde canlı akış ve metrikler yenilenir.
 
-#####🧑‍💻 Lokal Çalıştırma (Docker Olmadan)
+**🧑‍💻 Lokal Çalıştırma (Docker Olmadan)**
 
 Gerekenler: Python 3.11+, pip
 
@@ -95,7 +95,7 @@ python -m uvicorn backend.app:app --reload --port 8000
 3) (Opsiyonel) Dummy Veri Üreticisi
 python scripts/dummyGenerator.py --out data/flight_data.csv
 
-⚙️ Yapılandırma (ENV)
+**⚙️ Yapılandırma (ENV)**
 
 docker-compose.yml içinde veya lokalde export / $env: ile set edebilirsin.
 
@@ -109,7 +109,7 @@ TZ	Saat dilimi	Europe/Istanbul
 
 🔧 Kalibrasyon: Renk eşikleri ve MU_PER_OFFICER sahadaki gerçek işleme sürelerine göre güncellenmelidir.
 
-🔌 API Kısa Referans
+**🔌 API Kısa Referans**
 
 GET /health → { ok: true, csv: "/abs/path/flight_data.csv" }
 
@@ -123,7 +123,7 @@ GET /api/csv/latest?limit=50 → CSV’nin son N satırı
 
 GET /docs → Swagger UI
 
-🧰 Sorun Giderme
+**🧰 Sorun Giderme**
 
 Port 8000 dolu → lsof -i :8000 ile süreci kapat veya ports: ["8080:8000"].
 
