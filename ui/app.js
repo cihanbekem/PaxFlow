@@ -6,6 +6,42 @@ function classForLevel(levelTR) {
   return "red";
 }
 
+// Seri dakikalık [{ts, count}] geliyor. Bunu 5 dk (veya istenen) kovalara toplayalım.
+function bucketizeSeriesByMinutes(series, bucketMinutes = 5) {
+  if (!series || series.length === 0) return [];
+  const buckets = new Map();
+  for (const p of series) {
+    const d = new Date(p.ts);
+    // kovayı bul: örn. 5 dk'lık: minute -> Math.floor(min/5)*5
+    const m = d.getMinutes();
+    const bucketMin = Math.floor(m / bucketMinutes) * bucketMinutes;
+    const b = new Date(d);
+    b.setMinutes(bucketMin, 0, 0);
+    const key = b.toISOString();
+    buckets.set(key, (buckets.get(key) || 0) + (p.count || 0));
+  }
+  // zamana göre sırala
+  return Array.from(buckets.entries())
+    .map(([ts, count]) => ({ ts, count }))
+    .sort((a, b) => (a.ts < b.ts ? -1 : 1));
+}
+
+// YENİ: Son 24 saat için her SAATTE toplam geçen kişi
+function bucketizeSeriesByHour(series) {
+  if (!series || series.length === 0) return [];
+  const buckets = new Map();
+  for (const p of series) {
+    const d = new Date(p.ts);
+    const b = new Date(d);
+    b.setMinutes(0, 0, 0);             // saat başına sabitle
+    const key = b.toISOString();
+    buckets.set(key, (buckets.get(key) || 0) + (p.count || 0));
+  }
+  return Array.from(buckets.entries())
+    .map(([ts, count]) => ({ ts, count }))
+    .sort((a, b) => (a.ts < b.ts ? -1 : 1));
+}
+
 /* küçük sparkline (kart içi n_t trendi) */
 function px(val, min, max, H) {
   if (max === min) return H / 2;
@@ -97,7 +133,6 @@ async function apiSetOfficers(cp, count) {
     body: JSON.stringify({ checkpoint_id: cp, officers: count })
   });
 }
-// Yeni: CSV tabanlı metrik (varsa kullan; yoksa fallback yapacağız)
 
 // Destinasyon istatistikleri API çağrısı
 async function apiDestinations() {
@@ -109,10 +144,6 @@ async function apiDestinations() {
     return { destinations: [] };
   }
 }
-
-
-
-
 
 // Anlık ρ API çağrısı
 async function apiCurrentRho() {
@@ -136,8 +167,7 @@ function createPieChart(data, width = 400, height = 300) {
   const radius = Math.min(width, height) / 2 - 40;
   const centerX = width / 2;
   const centerY = height / 2;
-  
-  // Renk paleti
+
   const colors = [
     '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
     '#06b6d4', '#84cc16', '#f97316', '#ec4899', '#6366f1'
@@ -145,7 +175,7 @@ function createPieChart(data, width = 400, height = 300) {
 
   let currentAngle = 0;
   const total = data.reduce((sum, item) => sum + item.count, 0);
-  
+
   const slices = [];
   const labels = [];
   const legend = [];
@@ -154,46 +184,43 @@ function createPieChart(data, width = 400, height = 300) {
     const percentage = (item.count / total) * 100;
     const angle = (item.count / total) * 2 * Math.PI;
     const endAngle = currentAngle + angle;
-    
-    // Pie slice
+
     const x1 = centerX + radius * Math.cos(currentAngle);
     const y1 = centerY + radius * Math.sin(currentAngle);
     const x2 = centerX + radius * Math.cos(endAngle);
     const y2 = centerY + radius * Math.sin(endAngle);
-    
+
     const largeArcFlag = angle > Math.PI ? 1 : 0;
-    
+
     const pathData = [
       `M ${centerX} ${centerY}`,
       `L ${x1} ${y1}`,
       `A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2}`,
       'Z'
     ].join(' ');
-    
+
     slices.push(
       `<path d="${pathData}" fill="${colors[index % colors.length]}" stroke="var(--border)" stroke-width="2"/>`
     );
-    
-    // Label (sadece büyük dilimler için)
+
     if (percentage > 5) {
       const labelAngle = currentAngle + angle / 2;
       const labelRadius = radius * 0.7;
       const labelX = centerX + labelRadius * Math.cos(labelAngle);
       const labelY = centerY + labelRadius * Math.sin(labelAngle);
-      
+
       labels.push(
         `<text x="${labelX}" y="${labelY}" text-anchor="middle" dominant-baseline="middle" 
                fill="white" font-size="12" font-weight="bold">${item.destination}</text>`
       );
     }
-    
-    // Legend
+
     const legendY = 20 + index * 20;
     legend.push(
       `<rect x="10" y="${legendY - 8}" width="12" height="12" fill="${colors[index % colors.length]}" rx="2"/>`,
       `<text x="30" y="${legendY}" fill="currentColor" font-size="12">${item.destination} (${item.count} - %${item.percentage})</text>`
     );
-    
+
     currentAngle = endAngle;
   });
 
@@ -206,65 +233,49 @@ function createPieChart(data, width = 400, height = 300) {
   </svg>`;
 }
 
-
-
-
-
 // Gauge chart oluşturma fonksiyonu (ρ göstergesi için)
 function createGaugeChart(rho, width = 200, height = 150) {
   const radius = Math.min(width, height) * 0.8;
   const centerX = width / 2;
   const centerY = height * 0.8;
-  
-  // Gauge aralıkları
-  const maxRho = 3.0; // Maksimum ρ değeri
+
+  const maxRho = 3.0;
   const clampedRho = Math.min(rho, maxRho);
   const percentage = (clampedRho / maxRho) * 100;
-  
-  // Renk belirleme (backend ile aynı mantık)
+
   let color = "#16a34a"; // GREEN
-  if (rho >= 0.9) color = "#ef4444"; // RED
+  if (rho >= 0.9) color = "#ef4444";       // RED
   else if (0.9 > rho >= 0.7) color = "#eab308"; // YELLOW
-  
-  // Gauge arka planı (yarım daire)
+  else if (0.7 > rho) color = "#16a34a";   // GREEN
+
   const backgroundPath = [
     `M ${centerX - radius} ${centerY}`,
     `A ${radius} ${radius} 0 0 1 ${centerX + radius} ${centerY}`
   ].join(' ');
-  
-  // Gauge değeri (yarım daire)
+
   const angle = (percentage / 100) * Math.PI;
   const endX = centerX + radius * Math.cos(Math.PI - angle);
   const endY = centerY - radius * Math.sin(Math.PI - angle);
-  
+
   const valuePath = [
     `M ${centerX - radius} ${centerY}`,
     `A ${radius} ${radius} 0 0 1 ${endX} ${endY}`
   ].join(' ');
-  
-  // İbre (gösterge çizgisi)
+
   const needleX = centerX + (radius * 0.9) * Math.cos(Math.PI - angle);
   const needleY = centerY - (radius * 0.9) * Math.sin(Math.PI - angle);
-  
+
   return `<svg viewBox="0 0 ${width} ${height}" style="width:100%;height:${height}px">
-    <!-- Arka plan -->
     <path d="${backgroundPath}" fill="none" stroke="#334155" stroke-width="8" stroke-linecap="round"/>
-    
-    <!-- Değer -->
     <path d="${valuePath}" fill="none" stroke="${color}" stroke-width="8" stroke-linecap="round"/>
-    
-    <!-- İbre -->
     <line x1="${centerX}" y1="${centerY}" x2="${needleX}" y2="${needleY}" 
           stroke="#e5e7eb" stroke-width="2" stroke-linecap="round"/>
-    
-    <!-- Merkez nokta -->
     <circle cx="${centerX}" cy="${centerY}" r="4" fill="#e5e7eb"/>
-    
-    <!-- Değer metni -->
     <text x="${centerX}" y="${centerY + radius * 0.25}" text-anchor="middle" fill="currentColor" font-size="14" font-weight="bold">ρ ${rho}</text>
     <text x="${centerX}" y="${centerY + radius * 0.4}" text-anchor="middle" fill="var(--muted)" font-size="10">${percentage.toFixed(1)}%</text>
   </svg>`;
 }
+
 async function apiMetricsLast(minutes = 60) {
   try {
     const r = await fetch(`/api/metrics/last_minutes?minutes=${minutes}`);
@@ -274,6 +285,7 @@ async function apiMetricsLast(minutes = 60) {
     return null;
   }
 }
+
 // CSV canlı akış
 async function apiCsvLatest(limit = 50) {
   const r = await fetch(`/api/csv/latest?limit=${limit}`);
@@ -309,7 +321,7 @@ function aggregateTotalPerMinute(latest) {
 // CSV tablo render
 function renderCsvTable(data, prevIds) {
   const tbl = document.getElementById('csvTable');
-  if (!tbl) return new Set(); // panel yoksa atla
+  if (!tbl) return new Set();
 
   const cols = (data && data.columns) ? data.columns : [];
   const rows = (data && data.rows) ? data.rows : [];
@@ -355,11 +367,9 @@ async function render() {
   // ---- ÜST KPI + BAR GRAFİĞİ ----
   let series, kpis;
   if (metrics && metrics.series && metrics.kpis) {
-    // Backend'teki /api/metrics/last_minutes kullan
     series = metrics.series;               // [{ts, count}]
     kpis = metrics.kpis;                   // {total, avg_per_min, peak_count, peak_ts, cp_count}
   } else {
-    // Fallback: /api/latest verisinden türet
     series = aggregateTotalPerMinute(latest);
     const total = series.reduce((s, d) => s + d.count, 0);
     const avg = series.length ? total / series.length : 0;
@@ -391,6 +401,18 @@ async function render() {
     chartEl.innerHTML = barChartSVG(series, w, 180);
   }
 
+  // ---- Son 24 saat: HER SAATTE toplam geçen kişi grafiği ----
+  const metrics24 = await apiMetricsLast(60 * 24);  // backend'den dakika serisi
+  if (metrics24 && metrics24.series) {
+    const hourlySeries = bucketizeSeriesByHour(metrics24.series);
+    const last24 = hourlySeries.slice(-24);         // son 24 bar (24 saat)
+    const dayEl = document.getElementById('chartDay');
+    if (dayEl) {
+      const w2 = Math.max(dayEl.clientWidth || 1100, 600);
+      dayEl.innerHTML = barChartSVG(last24, w2, 180); // etiketler HH:00 görünecek
+    }
+  }
+
   // Destinasyon pie chart
   const destinationsChartEl = document.getElementById('destinationsChart');
   if (destinationsChartEl && destinations.destinations) {
@@ -398,8 +420,6 @@ async function render() {
     const h = Math.max(destinationsChartEl.clientHeight || 200, 150);
     destinationsChartEl.innerHTML = createPieChart(destinations.destinations, w, h);
   }
-
-
 
   // Anlık ρ gauge chart
   const rhoGaugeEl = document.getElementById('rhoGauge');
@@ -420,11 +440,9 @@ async function render() {
     const s = byCpSummary[cp];
     const cls = (s.level === "YEŞİL") ? 'green' : (s.level === "SARI" ? 'yellow' : 'red');
 
-    // kart içi n_t sparkline (son 30 dk)
     const seriesNt = (latestByCp[cp] || []).slice(-30).map(r => ({ x: r.ts_minute, y: (r.n_t ?? 0) }));
     const spark = sparklineSVG(seriesNt);
 
-    // officers sayısı (metinden)
     const officersMatch = s.detail.match(/görevli:\s*(\d+)/);
     const officers = officersMatch ? officersMatch[1] : "1";
     const rhoTxt = `ρ ${fmt(s.rho)}×`;
@@ -455,7 +473,6 @@ async function render() {
       </div>
     `;
 
-    // +/− event
     const offEl = card.querySelector('.off');
     card.querySelector('[data-op="-"]').addEventListener('click', async () => {
       const curr = parseInt(offEl.textContent || "1", 10);
@@ -494,19 +511,17 @@ async function render() {
 document.getElementById('themeToggle').addEventListener('click', () => {
   const body = document.body;
   const toggleBtn = document.getElementById('themeToggle');
-  
+
   body.classList.toggle('light');
-  
-  // İkon değiştir
+
   if (body.classList.contains('light')) {
-    toggleBtn.innerHTML = '🌙'; // Ay ikonu (açık temadan koyu temaya geçiş)
+    toggleBtn.innerHTML = '🌙';
     toggleBtn.title = 'Koyu Temaya Geç';
   } else {
-    toggleBtn.innerHTML = '☀️'; // Güneş ikonu (koyu temadan açık temaya geçiş)
+    toggleBtn.innerHTML = '☀️';
     toggleBtn.title = 'Açık Temaya Geç';
   }
-  
-  // Tema tercihini localStorage'a kaydet
+
   localStorage.setItem('theme', body.classList.contains('light') ? 'light' : 'dark');
 });
 
@@ -515,7 +530,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const savedTheme = localStorage.getItem('theme');
   const body = document.body;
   const toggleBtn = document.getElementById('themeToggle');
-  
+
   if (savedTheme === 'light') {
     body.classList.add('light');
     toggleBtn.innerHTML = '🌙';

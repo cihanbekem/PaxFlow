@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi import HTTPException
 from datetime import timedelta
 from collections import deque
+from datetime import timedelta
 
 
 
@@ -487,6 +488,61 @@ def get_warning_durations():
         
     except Exception as e:
         return {"durations": [], "max_red_streak": 0, "error": str(e)}
+    
+@app.get("/api/metrics/last_hours")
+def metrics_last_hours(hours: int = 24):
+    """
+    Saat başına toplam geçen kişi (tüm CP'lerin toplamı).
+    Çıkış:
+    {
+      "series": [ {"ts":"2025-08-18T13:00:00","count":123}, ... ],
+      "kpis":   { "total":..., "avg_per_hour":..., "peak_count":..., "peak_ts":..., "cp_count":... }
+    }
+    """
+    df = build_counts()  # 'ts', 'checkpoint_id', 'n_t' (dakikalık) döner
+    if df.empty:
+        return {"series": [], "kpis": {"total": 0, "avg_per_hour": 0.0, "peak_count": 0, "peak_ts": None, "cp_count": 0}}
+
+    df = df.dropna(subset=["ts"])
+    end_ts = df["ts"].max()
+    hours = max(1, int(hours))
+    start_ts = end_ts - pd.Timedelta(hours=hours - 1)
+
+    win = df[(df["ts"] >= start_ts) & (df["ts"] <= end_ts)]
+    if win.empty:
+        return {"series": [], "kpis": {"total": 0, "avg_per_hour": 0.0, "peak_count": 0, "peak_ts": None, "cp_count": 0}}
+
+    # Saat tabanına indir ve tüm CP'leri topla
+    s = (
+        win.assign(hour=win["ts"].dt.floor("H"))
+           .groupby("hour")["n_t"].sum()
+           .reset_index()
+           .sort_values("hour")
+    )
+
+    series = [{"ts": t.isoformat(), "count": int(c)} for t, c in zip(s["hour"], s["n_t"])]
+
+    total = int(s["n_t"].sum())
+    avg = float(s["n_t"].mean()) if not s.empty else 0.0
+    if not s.empty:
+        idx = s["n_t"].idxmax()
+        peak_count = int(s.loc[idx, "n_t"])
+        peak_ts = s.loc[idx, "hour"].isoformat()
+    else:
+        peak_count, peak_ts = 0, None
+    cp_count = int(win["checkpoint_id"].nunique())
+
+    return {
+        "series": series,
+        "kpis": {
+            "total": total,
+            "avg_per_hour": round(avg, 2),
+            "peak_count": peak_count,
+            "peak_ts": peak_ts,
+            "cp_count": cp_count,
+        },
+    }
+
 
 @app.get("/api/current-rho")
 def get_current_rho():
@@ -519,3 +575,4 @@ def get_current_rho():
         
     except Exception as e:
         return {"rho": 0.0, "lambda_hat": 0.0, "mu": 0.0, "error": str(e)}
+    
