@@ -135,5 +135,7 @@ CSV okunmuyor → data/flight_data.csv var mı? Volume izinlerini kontrol et.
 
 Dummy generator modül hataları → requirements.txt güncelle, yeniden build et.
 
-#Uygulamanın Ekran Görüntüsü#
+**Uygulamanın Ekran Görüntüsü**
+
+
 <img width="399" height="582" alt="Ekran Resmi 2025-08-22 13 49 52" src="https://github.com/user-attachments/assets/8f513f66-ad6b-4fa2-82f9-d4acaad470d0" />
