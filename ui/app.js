@@ -128,12 +128,17 @@ async function apiMetricsLast(minutes, signal) {
     return r.ok ? r.json() : null;
   } catch { return null; }
 }
-async function apiCsvLatest(limit, signal) {
-  try {
-    const r = await fetch(`/api/csv/latest?limit=${limit}`, { signal, cache: 'no-store', keepalive: true });
-    return r.ok ? r.json() : null;
-  } catch { return null; }
+// CSV'nin son N satırı (cache bypass)
+async function apiCsvLatest(limit = 50, signal) {
+  const r = await fetch(`/api/csv/latest?limit=${limit}&_t=${Date.now()}`, {
+    signal,
+    cache: 'no-store',
+    keepalive: true
+  });
+  if (!r.ok) return null;
+  return await r.json();
 }
+
 
 // ====== data shaping ======
 function groupLatestByCp(latest) {
@@ -637,3 +642,75 @@ const Scheduler = (() => {
 
 // Başlat
 Scheduler.start();
+
+/* === CSV LIVE (basit ve sade) ===============================
+   - Her 1 sn'de /api/csv/latest?limit=50 çağrılır (cache yok)
+   - Gelen satırlar #csvTable içine komple yazılır
+   - Başlık sırası ekrandakiyle uyumlu (bulduklarımızı yazar)
+============================================================= */
+(function csvLiveSimple(){
+  const PREFERRED = [
+    'ID','Name','PNR','OriginAirport','DestinationAirport','IATA',
+    'FlightNumber','FlightDate','CheckDate','IsSuccess','ErrorReason','Type'
+  ];
+  const tbl = document.getElementById('csvTable');
+  if (!tbl) return;
+
+  // küçük yardımcılar
+  const norm = k => (k||'').toString().toLowerCase();
+  const pickKey = (obj, name) => {
+    const want = norm(name);
+    return Object.keys(obj).find(k => norm(k) === want) || null;
+  };
+  const escape = (s) => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+
+  let lastHash = '';
+
+  async function tick(){
+    try {
+      const r = await fetch(`/api/csv/latest?limit=50&_t=${Date.now()}`, { cache:'no-store' });
+      if (!r.ok) throw new Error(r.status);
+      const payload = await r.json();                    // NOT: bu bir dosya değil, HTTP yanıt formatı
+      const rows = Array.isArray(payload) ? payload : (payload.rows ?? payload.data ?? []);
+      if (!Array.isArray(rows) || rows.length === 0) { schedule(); return; }
+
+      // değişim kontrolü (50 satır için hafif)
+      const h = JSON.stringify(rows);
+      if (h === lastHash) { schedule(); return; }
+      lastHash = h;
+
+      // kolonları sırala
+      const cols = [];
+      for (const name of PREFERRED) {
+        const k = pickKey(rows[0], name);
+        if (k) cols.push({key:k, title:name});
+      }
+      // tabloda olmayan ama gelen ekstra kolonlar da sona eklensin
+      const have = new Set(cols.map(c => c.key));
+      for (const k of Object.keys(rows[0])) if (!have.has(k)) {
+        cols.push({key:k, title:k});
+      }
+
+      // başlık
+      let html = '<thead><tr>';
+      for (const c of cols) html += `<th>${escape(c.title)}</th>`;
+      html += '</tr></thead><tbody>';
+
+      // satırlar
+      for (const r0 of rows) {
+        html += '<tr>';
+        for (const c of cols) html += `<td>${escape(r0[c.key])}</td>`;
+        html += '</tr>';
+      }
+      html += '</tbody>';
+
+      tbl.innerHTML = html;  // tek hamlede yaz: basit ve hızlı
+    } catch (e) {
+      // sessizce tekrar dene
+    } finally {
+      schedule();
+    }
+  }
+  function schedule(){ setTimeout(tick, 3000); }  // 1 sn
+  tick();
+})();
