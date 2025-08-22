@@ -1,5 +1,5 @@
 services:
-  app-dev:  # GELİŞTİRME (auto-reload)
+  app-dev:
     build: .
     image: paxboard:dev
     command: ["python","-m","uvicorn","backend.app:app","--host","0.0.0.0","--port","8000","--reload"]
@@ -15,26 +15,10 @@ services:
       - ./backend:/app/backend
       - ./ui:/app/ui
       - ./data/flight_data.csv:/data/flight_data.csv:rw
-    # platform: linux/amd64  # M1/M2 Mac ve hedef amd64 ise aç
+    # platform: linux/amd64   # Apple Silicon + amd64 hedefi gerekiyorsa aç
 
-  app:      # PROD benzeri (reload yok, kod mount yok)
-    build: .
-    image: paxboard:latest
-    command: ["python","-m","uvicorn","backend.app:app","--host","0.0.0.0","--port","8000"]
-    ports: ["8000:8000"]
-    environment:
-      CSV_PATH: /data/flight_data.csv
-      MU_PER_OFFICER: "0.50"
-      ALPHA: "0.25"
-      GREEN: "0.7"
-      YELLOW: "0.9"
-      TZ: Europe/Istanbul
-    volumes:
-      - ./data/flight_data.csv:/data/flight_data.csv:rw
-    # platform: linux/amd64
-
-  generator:  # isteğe bağlı: dummy veri üretici
-    image: python:3.11-slim
+  generator:
+    image: paxboard:dev         # pandas hazır
     working_dir: /work
     volumes:
       - ./scripts:/work:ro
