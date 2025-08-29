@@ -1,4 +1,4 @@
-**✈️ PaxFlow — Boarding Pass Yoğunluk Paneli**
+# ✈️ PaxFlow — Boarding Pass Yoğunluk Paneli**
 
 Check‐in/boarding kapılarındaki anlık yoğunluğu (ρ = λ̂ / μ) izleyen, EWMA ile akışı yumuşatan ve görevli sayısına göre kapasiteyi hesaplayıp renkli uyarılar + öneriler üreten hafif bir panel.
 
@@ -6,7 +6,7 @@ Check‐in/boarding kapılarındaki anlık yoğunluğu (ρ = λ̂ / μ) izleyen,
 
 📑 API Docs (Swagger): http://localhost:8000/docs
 
-**🚀 Özellikler**
+# 🚀 Özellikler**
 
 ⏱️ Dakikalık akış: CSV’den dakikadaki kişi sayısı (n_t) çıkarılır (eksik dakikalar 0 ile doldurulur).
 
@@ -22,7 +22,7 @@ Check‐in/boarding kapılarındaki anlık yoğunluğu (ρ = λ̂ / μ) izleyen,
 
 🧪 Opsiyonel dummy veri üreticisi.
 
-**📂 Dizin Yapısı**
+# 📂 Dizin Yapısı
 **.**
 **├─ backend/**
 **│  └─ app.py**             # FastAPI (API + CSV watcher + EWMA)
@@ -37,7 +37,7 @@ Check‐in/boarding kapılarındaki anlık yoğunluğu (ρ = λ̂ / μ) izleyen,
 **├─ Dockerfile**
 **└─ docker-compose.yml**
 
-**🐳 Hızlı Başlangıç — Docker ile**
+# 🐳 Hızlı Başlangıç — Docker ile
 
 Önkoşul: Docker Desktop (Compose v2).
 
@@ -66,7 +66,7 @@ docker compose down
 
 💡 Not: Generator servisi CSV’ye yazdıkça panelde canlı akış ve metrikler yenilenir.
 
-**🧑‍💻 Lokal Çalıştırma (Docker Olmadan)**
+# 🧑‍💻 Lokal Çalıştırma (Docker Olmadan)
 
 Gerekenler: Python 3.11+, pip
 
@@ -90,12 +90,12 @@ mkdir -p data && [ -f data/flight_data.csv ] || touch data/flight_data.csv
 python -m uvicorn backend.app:app --reload --port 8000
 
 
-➡️ Aç: http://localhost:8000/ui/index.html
+**➡️ Aç: http://localhost:8000/ui/index.html**
 
 3) (Opsiyonel) Dummy Veri Üreticisi
 python scripts/dummyGenerator.py --out data/flight_data.csv
 
-**⚙️ Yapılandırma (ENV)**
+# ⚙️ Yapılandırma (ENV)
 
 docker-compose.yml içinde veya lokalde export / $env: ile set edebilirsin.
 
@@ -109,7 +109,7 @@ TZ	Saat dilimi	Europe/Istanbul
 
 🔧 Kalibrasyon: Renk eşikleri ve MU_PER_OFFICER sahadaki gerçek işleme sürelerine göre güncellenmelidir.
 
-**🔌 API Kısa Referans**
+# 🔌 API Kısa Referans
 
 GET /health → { ok: true, csv: "/abs/path/flight_data.csv" }
 
@@ -135,7 +135,7 @@ CSV okunmuyor → data/flight_data.csv var mı? Volume izinlerini kontrol et.
 
 Dummy generator modül hataları → requirements.txt güncelle, yeniden build et.
 
-**Uygulamanın Ekran Görüntüsü**
+# Uygulamanın Ekran Görüntüsü
 
 
 <img width="399" height="582" alt="Ekran Resmi 2025-08-22 13 49 52" src="https://github.com/user-attachments/assets/8f513f66-ad6b-4fa2-82f9-d4acaad470d0" />
