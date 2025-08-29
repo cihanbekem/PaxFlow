@@ -123,7 +123,7 @@ GET /api/csv/latest?limit=50 → CSV’nin son N satırı
 
 GET /docs → Swagger UI
 
-**🧰 Sorun Giderme**
+# 🧰 Sorun Giderme
 
 Port 8000 dolu → lsof -i :8000 ile süreci kapat veya ports: ["8080:8000"].
 
